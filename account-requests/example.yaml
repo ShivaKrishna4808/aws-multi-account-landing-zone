@@ -1,0 +1,6 @@
+account:
+  name: landing-zone-example
+  environment: sandbox
+  organizational_unit: Workloads
+  region: us-west-2
+  owner: platform-team

@@ -9,6 +9,8 @@ on:
       - "live/**"
       - "policies/**"
       - "scripts/**"
+      - "account-requests/**"
+      - "schemas/**"
       - ".github/workflows/terraform-pr.yml"
 
 concurrency:
@@ -46,6 +48,21 @@ jobs:
         with:
           version: "1.20.2"
 
+      - name: Install account request validation dependencies
+        run: |
+          sudo wget -q \
+            https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_amd64 \
+            -O /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+          python3 -m pip install jsonschema
+
+      - name: Validate account requests
+        run: |
+          for request in account-requests/*.yaml; do
+            echo "Validating ${request}"
+            ./scripts/validate-account-request.sh "${request}"
+          done
+
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive
 
@@ -60,7 +77,6 @@ jobs:
     needs:
       - static-validation
 
-    # Do not give AWS OIDC credentials to fork-based PRs.
     if: github.event.pull_request.head.repo.full_name == github.repository
 
     runs-on: ubuntu-latest
@@ -74,7 +90,6 @@ jobs:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
       TG_NON_INTERACTIVE: "true"
-
       TG_SANDBOX_ACCOUNT_ID: ${{ vars.AWS_SANDBOX_ACCOUNT_ID }}
       TG_PROVIDER_ROLE_ARN: arn:aws:iam::${{ vars.AWS_SANDBOX_ACCOUNT_ID }}:role/OrganizationAccountAccessRole
 
@@ -132,8 +147,7 @@ jobs:
             > "${GITHUB_WORKSPACE}/tfplan.json"
 
       - name: Validate Terraform plan with OPA
-        run: |
-          ./scripts/validate.sh tfplan.json
+        run: ./scripts/validate.sh tfplan.json
 
       - name: Remove plan artifacts
         if: always()
