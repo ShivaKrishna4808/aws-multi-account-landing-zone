@@ -1,0 +1,57 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "AWS Landing Zone Account Request",
+    "type": "object",
+    "required": [
+      "account"
+    ],
+    "properties": {
+      "account": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "environment",
+          "organizational_unit",
+          "region",
+          "owner"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "minLength": 3,
+            "maxLength": 50
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "development",
+              "test",
+              "production"
+            ]
+          },
+          "organizational_unit": {
+            "type": "string",
+            "enum": [
+              "Security",
+              "Platform",
+              "Workloads"
+            ]
+          },
+          "region": {
+            "type": "string",
+            "enum": [
+              "us-west-2"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 2
+          }
+        }
+      }
+    },
+    "additionalProperties": false
+  }
