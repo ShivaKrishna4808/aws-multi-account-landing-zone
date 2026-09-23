@@ -57,7 +57,6 @@ jobs:
           sudo wget -q \
             https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_amd64 \
             -O /usr/local/bin/yq
-
           sudo chmod +x /usr/local/bin/yq
           python3 -m pip install jsonschema
 
@@ -77,7 +76,7 @@ jobs:
       - name: Verify AWS management account
         run: aws sts get-caller-identity
 
-        - name: Read account request
+      - name: Read account request
         id: request
         run: |
           REQUEST="${{ inputs.request_file }}"
@@ -88,12 +87,13 @@ jobs:
             echo "ou=$(yq -r '.account.organizational_unit' "$REQUEST")"
             echo "owner=$(yq -r '.account.owner' "$REQUEST")"
           } >> "$GITHUB_OUTPUT"
+
       - name: Render account factory stack
         run: |
           ./scripts/render-account-request.sh \
             "${{ inputs.request_file }}"
 
-            - name: Export account factory variables
+      - name: Export account factory variables
         run: |
           {
             echo "TG_ACCOUNT_NAME=${{ steps.request.outputs.account_name }}"
@@ -101,6 +101,7 @@ jobs:
             echo "TG_ORGANIZATIONAL_UNIT=${{ steps.request.outputs.ou }}"
             echo "TG_OWNER=${{ steps.request.outputs.owner }}"
           } >> "$GITHUB_ENV"
+
       - name: Configure plan-only account email
         if: inputs.mode == 'plan'
         run: |
@@ -108,13 +109,15 @@ jobs:
 
       - name: Configure real account email for apply
         if: inputs.mode == 'apply'
+        env:
+          ACCOUNT_EMAIL: ${{ secrets.AWS_NEW_ACCOUNT_EMAIL }}
         run: |
-          if [ -z "${{ secrets.AWS_NEW_ACCOUNT_EMAIL }}" ]; then
+          if [ -z "$ACCOUNT_EMAIL" ]; then
             echo "AWS_NEW_ACCOUNT_EMAIL GitHub secret is required for apply mode."
             exit 1
           fi
 
-          echo "TG_ACCOUNT_EMAIL=${{ secrets.AWS_NEW_ACCOUNT_EMAIL }}" >> "$GITHUB_ENV"
+          echo "TG_ACCOUNT_EMAIL=$ACCOUNT_EMAIL" >> "$GITHUB_ENV"
 
       - name: Terraform plan
         working-directory: live/generated/${{ steps.request.outputs.account_name }}
