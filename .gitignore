@@ -1,0 +1,31 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Terraform variable files
+*.tfvars
+*.tfvars.json
+
+# Terragrunt cache
+.terragrunt-cache/
+
+# Sensitive files
+*.pem
+*.key
+.env
+.env.*
+
+# Terraform CLI
+.terraformrc
+terraform.rc
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
