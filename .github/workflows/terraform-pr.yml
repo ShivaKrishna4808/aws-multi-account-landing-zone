@@ -1,0 +1,141 @@
+name: Terraform PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "modules/**"
+      - "live/**"
+      - "policies/**"
+      - "scripts/**"
+      - ".github/workflows/terraform-pr.yml"
+
+concurrency:
+  group: terraform-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    name: Terraform & OPA Static Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      - name: Install Terragrunt
+        uses: gruntwork-io/terragrunt-action@v3.4.1
+        with:
+          tg_version: "1.1.6"
+          tf_path: terraform
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2.4.0
+        with:
+          version: "1.20.2"
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+
+      - name: Check Terragrunt formatting
+        run: terragrunt hcl fmt --check --diff
+
+      - name: Run OPA policy tests
+        run: opa test policies/opa -v
+
+  sandbox-plan:
+    name: Sandbox Terraform Plan + OPA
+    needs:
+      - static-validation
+
+    # Do not give AWS OIDC credentials to fork-based PRs.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      AWS_REGION: us-west-2
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TG_NON_INTERACTIVE: "true"
+
+      TG_SANDBOX_ACCOUNT_ID: ${{ vars.AWS_SANDBOX_ACCOUNT_ID }}
+      TG_PROVIDER_ROLE_ARN: arn:aws:iam::${{ vars.AWS_SANDBOX_ACCOUNT_ID }}:role/OrganizationAccountAccessRole
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      - name: Install Terragrunt
+        uses: gruntwork-io/terragrunt-action@v3.4.1
+        with:
+          tg_version: "1.1.6"
+          tf_path: terraform
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2.4.0
+        with:
+          version: "1.20.2"
+
+      - name: Configure AWS credentials using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: landing-zone-pr-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_MANAGEMENT_ACCOUNT_ID }}
+
+      - name: Verify management-account identity
+        run: aws sts get-caller-identity
+
+      - name: Initialize Sandbox networking stack
+        working-directory: live/accounts/sandbox/networking
+        run: terragrunt init --non-interactive
+
+      - name: Generate Terraform plan
+        working-directory: live/accounts/sandbox/networking
+        run: |
+          terragrunt plan \
+            --non-interactive \
+            -out="${GITHUB_WORKSPACE}/tfplan.binary"
+
+      - name: Convert plan to JSON
+        working-directory: live/accounts/sandbox/networking
+        run: |
+          terragrunt show \
+            -json \
+            "${GITHUB_WORKSPACE}/tfplan.binary" \
+            > "${GITHUB_WORKSPACE}/tfplan.json"
+
+      - name: Validate Terraform plan with OPA
+        run: |
+          ./scripts/validate.sh tfplan.json
+
+      - name: Remove plan artifacts
+        if: always()
+        run: |
+          rm -f tfplan.binary tfplan.json
