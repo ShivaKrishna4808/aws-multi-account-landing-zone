@@ -29,3 +29,5 @@ terraform.rc
 
 # macOS
 .DS_Store
+# Runtime-generated account factory stacks
+live/generated/
