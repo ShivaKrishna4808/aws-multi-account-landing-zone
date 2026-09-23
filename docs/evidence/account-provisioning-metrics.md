@@ -29,20 +29,4 @@ The **6.588-second** measurement represents the AWS Organizations `CreateAccount
 
 The **62-second** measurement represents the self-service GitHub Actions validation and Terraform planning pipeline.
 
-These measurements should not be combined and described as a complete end-to-end landing-zone provisioning duration because the full workflow also includes:
-
-- Organizational Unit placement
-- Member-account bootstrap
-- Networking baseline
-- IAM/security baseline
-- Service Control Policies
-- Logging and governance configuration
-- Post-provisioning verification
-
-## Demonstrated Performance
-
-The project demonstrates:
-
-- AWS Organizations account creation completed in approximately **7 seconds**
-- Self-service account request validation and Terraform planning completed in approximately **1 minute**
-- Automated execution using GitHub OIDC with no long-lived AWS credentials
+These measurements should not be combined and described as a complete end-to-end landing-zone provisioning duration.
