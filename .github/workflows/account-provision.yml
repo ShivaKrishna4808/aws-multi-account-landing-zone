@@ -8,6 +8,7 @@ on:
         required: true
         default: "account-requests/example.yaml"
         type: string
+
       mode:
         description: "Provisioning mode"
         required: true
@@ -76,32 +77,40 @@ jobs:
       - name: Verify AWS management account
         run: aws sts get-caller-identity
 
-      - name: Read account request
+        - name: Read account request
         id: request
         run: |
           REQUEST="${{ inputs.request_file }}"
 
-          echo "account_name=$(yq -r '.account.name' "$REQUEST")" >> "$GITHUB_OUTPUT"
-          echo "environment=$(yq -r '.account.environment' "$REQUEST")" >> "$GITHUB_OUTPUT"
-          echo "ou=$(yq -r '.account.organizational_unit' "$REQUEST")" >> "$GITHUB_OUTPUT"
-          echo "owner=$(yq -r '.account.owner' "$REQUEST")" >> "$GITHUB_OUTPUT"
-
+          {
+            echo "account_name=$(yq -r '.account.name' "$REQUEST")"
+            echo "environment=$(yq -r '.account.environment' "$REQUEST")"
+            echo "ou=$(yq -r '.account.organizational_unit' "$REQUEST")"
+            echo "owner=$(yq -r '.account.owner' "$REQUEST")"
+          } >> "$GITHUB_OUTPUT"
       - name: Render account factory stack
         run: |
           ./scripts/render-account-request.sh \
             "${{ inputs.request_file }}"
 
-      - name: Export account factory variables
+            - name: Export account factory variables
         run: |
-          echo "TG_ACCOUNT_NAME=${{ steps.request.outputs.account_name }}" >> "$GITHUB_ENV"
-          echo "TG_ENVIRONMENT=${{ steps.request.outputs.environment }}" >> "$GITHUB_ENV"
-          echo "TG_ORGANIZATIONAL_UNIT=${{ steps.request.outputs.ou }}" >> "$GITHUB_ENV"
-          echo "TG_OWNER=${{ steps.request.outputs.owner }}" >> "$GITHUB_ENV"
+          {
+            echo "TG_ACCOUNT_NAME=${{ steps.request.outputs.account_name }}"
+            echo "TG_ENVIRONMENT=${{ steps.request.outputs.environment }}"
+            echo "TG_ORGANIZATIONAL_UNIT=${{ steps.request.outputs.ou }}"
+            echo "TG_OWNER=${{ steps.request.outputs.owner }}"
+          } >> "$GITHUB_ENV"
+      - name: Configure plan-only account email
+        if: inputs.mode == 'plan'
+        run: |
+          echo "TG_ACCOUNT_EMAIL=landing-zone-plan-only@example.invalid" >> "$GITHUB_ENV"
 
-      - name: Require account email secret
+      - name: Configure real account email for apply
+        if: inputs.mode == 'apply'
         run: |
           if [ -z "${{ secrets.AWS_NEW_ACCOUNT_EMAIL }}" ]; then
-            echo "AWS_NEW_ACCOUNT_EMAIL GitHub secret is not configured."
+            echo "AWS_NEW_ACCOUNT_EMAIL GitHub secret is required for apply mode."
             exit 1
           fi
 
