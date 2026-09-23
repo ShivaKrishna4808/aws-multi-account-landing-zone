@@ -103,3 +103,26 @@ resource "aws_route_table_association" "private" {
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
+
+
+# TEMPORARY POLICY-AS-CODE TEST ONLY
+resource "aws_eip" "opa_test_nat" {
+  domain = "vpc"
+
+  tags = {
+    Name      = "opa-policy-test"
+    ManagedBy = "Terraform"
+    Project   = "aws-multi-account-landing-zone"
+  }
+}
+
+resource "aws_nat_gateway" "opa_test" {
+  allocation_id = aws_eip.opa_test_nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name      = "opa-policy-test"
+    ManagedBy = "Terraform"
+    Project   = "aws-multi-account-landing-zone"
+  }
+}
