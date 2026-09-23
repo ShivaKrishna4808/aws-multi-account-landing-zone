@@ -54,3 +54,47 @@ Developer
 ## Project Status
 
 Currently under active development.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[Developer / Platform User] --> B[Account Request YAML]
+
+    B --> C[Pull Request]
+
+    C --> D[JSON Schema Validation]
+    C --> E[Terraform Format Validation]
+    C --> F[Terragrunt Validation]
+    C --> G[OPA Policy Tests]
+
+    D --> H[Protected Main Branch]
+    E --> H
+    F --> H
+    G --> H
+
+    H --> I[GitHub Actions]
+
+    I --> J[GitHub OIDC]
+
+    J --> K[Plan Role]
+    J --> L[Apply Role]
+
+    K --> M[Sandbox Terraform Plan]
+    M --> N[OPA Plan Validation]
+
+    L --> O[Self-Service Account Factory]
+    O --> P[AWS Organizations]
+
+    P --> Q[Security OU]
+    P --> R[Platform OU]
+    P --> S[Workloads OU]
+
+    S --> T[Sandbox Account]
+
+    T --> U[Standard VPC]
+    T --> V[Public / Private Subnets]
+
+    P --> W[Service Control Policies]
+    P --> X[Organization CloudTrail]
+    X --> Y[Central Audit S3 Bucket]
