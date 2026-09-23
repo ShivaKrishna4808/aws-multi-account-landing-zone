@@ -1,0 +1,125 @@
+name: Provision AWS Account
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_file:
+        description: "Account request YAML file"
+        required: true
+        default: "account-requests/example.yaml"
+        type: string
+      mode:
+        description: "Provisioning mode"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  provision-account:
+    name: AWS Account Factory
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-west-2
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TG_NON_INTERACTIVE: "true"
+
+    steps:
+      - name: Checkout protected main branch
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+          terraform_wrapper: false
+
+      - name: Install Terragrunt
+        uses: gruntwork-io/terragrunt-action@v3.4.1
+        with:
+          tg_version: "1.1.6"
+          tf_path: terraform
+
+      - name: Install yq and JSON Schema validator
+        run: |
+          sudo wget -q \
+            https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_amd64 \
+            -O /usr/local/bin/yq
+
+          sudo chmod +x /usr/local/bin/yq
+          python3 -m pip install jsonschema
+
+      - name: Validate account request
+        run: |
+          ./scripts/validate-account-request.sh \
+            "${{ inputs.request_file }}"
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: landing-zone-account-factory-${{ github.run_id }}
+          allowed-account-ids: ${{ vars.AWS_MANAGEMENT_ACCOUNT_ID }}
+
+      - name: Verify AWS management account
+        run: aws sts get-caller-identity
+
+      - name: Read account request
+        id: request
+        run: |
+          REQUEST="${{ inputs.request_file }}"
+
+          echo "account_name=$(yq -r '.account.name' "$REQUEST")" >> "$GITHUB_OUTPUT"
+          echo "environment=$(yq -r '.account.environment' "$REQUEST")" >> "$GITHUB_OUTPUT"
+          echo "ou=$(yq -r '.account.organizational_unit' "$REQUEST")" >> "$GITHUB_OUTPUT"
+          echo "owner=$(yq -r '.account.owner' "$REQUEST")" >> "$GITHUB_OUTPUT"
+
+      - name: Render account factory stack
+        run: |
+          ./scripts/render-account-request.sh \
+            "${{ inputs.request_file }}"
+
+      - name: Export account factory variables
+        run: |
+          echo "TG_ACCOUNT_NAME=${{ steps.request.outputs.account_name }}" >> "$GITHUB_ENV"
+          echo "TG_ENVIRONMENT=${{ steps.request.outputs.environment }}" >> "$GITHUB_ENV"
+          echo "TG_ORGANIZATIONAL_UNIT=${{ steps.request.outputs.ou }}" >> "$GITHUB_ENV"
+          echo "TG_OWNER=${{ steps.request.outputs.owner }}" >> "$GITHUB_ENV"
+
+      - name: Require account email secret
+        run: |
+          if [ -z "${{ secrets.AWS_NEW_ACCOUNT_EMAIL }}" ]; then
+            echo "AWS_NEW_ACCOUNT_EMAIL GitHub secret is not configured."
+            exit 1
+          fi
+
+          echo "TG_ACCOUNT_EMAIL=${{ secrets.AWS_NEW_ACCOUNT_EMAIL }}" >> "$GITHUB_ENV"
+
+      - name: Terraform plan
+        working-directory: live/generated/${{ steps.request.outputs.account_name }}
+        run: |
+          terragrunt init --non-interactive
+
+          terragrunt plan \
+            --non-interactive \
+            -out="${GITHUB_WORKSPACE}/account.tfplan"
+
+      - name: Apply approved account request
+        if: inputs.mode == 'apply'
+        working-directory: live/generated/${{ steps.request.outputs.account_name }}
+        run: |
+          terragrunt apply \
+            --non-interactive \
+            "${GITHUB_WORKSPACE}/account.tfplan"
