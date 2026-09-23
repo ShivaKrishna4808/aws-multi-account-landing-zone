@@ -4,14 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "modules/**"
-      - "live/**"
-      - "policies/**"
-      - "scripts/**"
-      - "account-requests/**"
-      - "schemas/**"
-      - ".github/workflows/terraform-pr.yml"
 
 concurrency:
   group: terraform-pr-${{ github.event.pull_request.number }}
