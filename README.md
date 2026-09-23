@@ -98,3 +98,9 @@ flowchart TD
     P --> W[Service Control Policies]
     P --> X[Organization CloudTrail]
     X --> Y[Central Audit S3 Bucket]
+```
+## Evidence
+
+- [Self-Service Account Factory Plan Validation](docs/evidence/account-factory-plan.md)
+- [AWS Account Provisioning Metrics](docs/evidence/account-provisioning-metrics.md)
+- [Member Account Security Baseline Guardrail](docs/evidence/security-baseline-guardrail.md)
